@@ -1,60 +1,110 @@
-# MentraOS-Camera-Example-App
+# MentraOS Camera Example App with LLM Analysis
 
-This is a simple example app which demonstrates how to use the MentraOS Camera API to take photos and display them in a webview.
+This is an example application for the MentraOS platform that demonstrates photo capture with real-time AI analysis using OpenAI's GPT-4 Vision model.
 
-You could also send the photo to an AI api, store it in a database or cloud storage, send it to Roboflow, or do other processing.
+## Features
 
-### Install MentraOS on your phone
+- **Photo Capture**: Take photos using the Mentra Live device
+- **Real-time Analysis**: Automatic AI analysis of captured photos
+- **Web Interface**: View photos and analysis results in a beautiful web interface
+- **Dual Modes**: Single photo capture and continuous streaming modes
+- **AI Insights**: Get descriptions, tags, captions, and confidence scores
 
-MentraOS install links: [mentra.glass/install](https://mentra.glass/install)
+## Setup
 
-### (Easiest way to get started) Set up ngrok
+### Prerequisites
 
-1. `brew install ngrok`
+1. **MentraOS Account**: You need a MentraOS account and API key
+2. **OpenAI API Key**: For LLM analysis functionality
+3. **Node.js/Bun**: For running the application
 
-2. Make an ngrok account
+### Environment Variables
 
-3. [Use ngrok to make a static address/URL](https://dashboard.ngrok.com/)
+Create a `.env` file in the root directory with the following variables:
 
-### Register your App with MentraOS
+```env
+# MentraOS Configuration
+PACKAGE_NAME=your-package-name
+MENTRAOS_API_KEY=your-mentraos-api-key
+PORT=3000
 
-1. Navigate to [console.mentra.glass](https://console.mentra.glass/)
+# OpenAI Configuration (for LLM analysis)
+OPENAI_API_KEY=your-openai-api-key
+```
 
-2. Click "Sign In", and log in with the same account you're using for MentraOS
+### Installation
 
-3. Click "Create App"
+1. Install dependencies:
+```bash
+npm install
+# or
+bun install
+```
 
-4. Set a unique package name like `com.yourName.yourAppName`
+2. Set up your environment variables (see above)
 
-5. For "Public URL", enter your Ngrok's static URL
+3. Run the application:
+```bash
+npm start
+# or
+bun start
+```
 
-6. In the edit app screen, add the microphone permission
+## Usage
 
-### Get your App running!
+### Device Controls
 
-1. [Install bun](https://bun.sh/docs/installation)
+- **Short Press**: Take a single photo with AI analysis
+- **Long Press**: Toggle continuous photo capture mode (photos every 30 seconds)
 
-2. Clone this repo locally: `git clone https://github.com/Mentra-Community/MentraOS-Camera-Example-App`
+### Web Interface
 
-3. cd into your repo, then type `bun install`
+Access the web interface at `http://localhost:3000/webview` to view:
+- Latest captured photo
+- Real-time AI analysis status
+- Generated captions
+- Detailed descriptions
+- Relevant tags
+- Confidence scores
 
-5. Set up your environment variables:
-   * Create a `.env` file in the root directory by copying the example: `cp .env.example .env`
-   * Edit the `.env` file with your app details:
-     ```
-     PORT=3000
-     PACKAGE_NAME=com.yourName.yourAppName
-     MENTRAOS_API_KEY=your_api_key_from_console
-     ```
-   * Make sure the `PACKAGE_NAME` matches what you registered in the MentraOS Console
-   * Get your `API_KEY` from the MentraOS Developer Console
+## API Endpoints
 
-6. Run your app with `bun run dev`
+- `GET /webview` - Main photo viewer interface
+- `GET /api/latest-photo` - Get latest photo metadata and analysis
+- `GET /api/photo/:requestId` - Get photo data
 
-7. To expose your app to the internet (and thus MentraOS) with ngrok, run: `ngrok http --url=<YOUR_NGROK_URL_HERE> 3000`
-    * `3000` is the port. It must match what is in the app config. For example, if you entered `port: 8080`, use `8080` for ngrok instead.
+## LLM Analysis Features
 
+The app uses OpenAI's GPT-4 Vision model to provide:
 
-### Next Steps
+1. **Image Description**: Detailed analysis of what's in the photo
+2. **Tags**: Relevant keywords and categories
+3. **Captions**: Creative, engaging captions
+4. **Confidence Scores**: How confident the AI is in its analysis
 
-Check out the full documentation at [docs.mentra.glass](https://docs.mentra.glass/camera)
+## Architecture
+
+- **Backend**: Node.js/TypeScript with Express
+- **AI Service**: OpenAI GPT-4 Vision API
+- **Frontend**: EJS templates with real-time updates
+- **Storage**: In-memory storage (photos and analysis results)
+
+## Development
+
+For development with hot reloading:
+```bash
+npm run dev
+# or
+bun run dev
+```
+
+## Deployment
+
+The app can be deployed using Docker or any Node.js hosting platform. Make sure to:
+1. Set all required environment variables
+2. Expose the correct port
+3. Set up proper authentication for production use
+
+## License
+
+ISC
