@@ -2,9 +2,10 @@ import { AppServer, AppSession, ViewType, AuthenticatedRequest, PhotoData } from
 import { Request, Response } from 'express';
 import * as ejs from 'ejs';
 import * as path from 'path';
+import { LLMService, LLMAnalysis } from './llm-service';
 
 /**
- * Interface representing a stored photo with metadata
+ * Interface representing a stored photo with metadata and LLM analysis
  */
 interface StoredPhoto {
   requestId: string;
@@ -14,6 +15,9 @@ interface StoredPhoto {
   mimeType: string;
   filename: string;
   size: number;
+  llmAnalysis?: LLMAnalysis;
+  caption?: string;
+  isAnalyzing: boolean;
 }
 
 const PACKAGE_NAME = process.env.PACKAGE_NAME ?? (() => { throw new Error('PACKAGE_NAME is not set in .env file'); })();
@@ -21,14 +25,15 @@ const MENTRAOS_API_KEY = process.env.MENTRAOS_API_KEY ?? (() => { throw new Erro
 const PORT = parseInt(process.env.PORT || '3000');
 
 /**
- * Photo Taker App with webview functionality for displaying photos
- * Extends AppServer to provide photo taking and webview display capabilities
+ * Photo Taker App with webview functionality for displaying photos and LLM analysis
+ * Extends AppServer to provide photo taking, LLM analysis, and webview display capabilities
  */
 class ExampleMentraOSApp extends AppServer {
   private photos: Map<string, StoredPhoto> = new Map(); // Store photos by userId
   private latestPhotoTimestamp: Map<string, number> = new Map(); // Track latest photo timestamp per user
   private isStreamingPhotos: Map<string, boolean> = new Map(); // Track if we are streaming photos for a user
   private nextPhotoTime: Map<string, number> = new Map(); // Track next photo time for a user
+  private llmService: LLMService;
 
   constructor() {
     super({
@@ -36,9 +41,12 @@ class ExampleMentraOSApp extends AppServer {
       apiKey: MENTRAOS_API_KEY,
       port: PORT,
     });
+    
+    // Initialize LLM service
+    this.llmService = new LLMService();
+    
     this.setupWebviewRoutes();
   }
-
 
   /**
    * Handle new session creation and button press events
@@ -68,7 +76,7 @@ class ExampleMentraOSApp extends AppServer {
           const photo = await session.camera.requestPhoto();
           // if there was an error, log it
           this.logger.info(`Photo taken for user ${userId}, timestamp: ${photo.timestamp}`);
-          this.cachePhoto(photo, userId);
+          await this.cachePhoto(photo, userId);
         } catch (error) {
           this.logger.error(`Error taking photo: ${error}`);
         }
@@ -89,7 +97,7 @@ class ExampleMentraOSApp extends AppServer {
           this.nextPhotoTime.set(userId, Date.now());
 
           // cache the photo for display
-          this.cachePhoto(photo, userId);
+          await this.cachePhoto(photo, userId);
         } catch (error) {
           this.logger.error(`Error auto-taking photo: ${error}`);
         }
@@ -105,7 +113,7 @@ class ExampleMentraOSApp extends AppServer {
   }
 
   /**
-   * Cache a photo for display
+   * Cache a photo for display and trigger LLM analysis
    */
   private async cachePhoto(photo: PhotoData, userId: string) {
     // create a new stored photo object which includes the photo data and the user id
@@ -116,23 +124,59 @@ class ExampleMentraOSApp extends AppServer {
       userId: userId,
       mimeType: photo.mimeType,
       filename: photo.filename,
-      size: photo.size
+      size: photo.size,
+      isAnalyzing: true
     };
 
-    // this example app simply stores the photo in memory for display in the webview, but you could also send the photo to an AI api,
-    // or store it in a database or cloud storage, send it to roboflow, or do other processing here
-
-    // cache the photo for display
+    // cache the photo immediately for display
     this.photos.set(userId, cachedPhoto);
-    // update the latest photo timestamp
     this.latestPhotoTimestamp.set(userId, cachedPhoto.timestamp.getTime());
     this.logger.info(`Photo cached for user ${userId}, timestamp: ${cachedPhoto.timestamp}`);
+
+    // Trigger LLM analysis in the background
+    this.analyzePhotoWithLLM(cachedPhoto, userId);
   }
 
+  /**
+   * Analyze photo with LLM in the background
+   */
+  private async analyzePhotoWithLLM(photo: StoredPhoto, userId: string) {
+    try {
+      this.logger.info(`Starting LLM analysis for photo ${photo.requestId}`);
+      
+      // Analyze the photo
+      const analysis = await this.llmService.analyzePhoto(photo.buffer, photo.mimeType);
+      
+      // Generate a caption
+      const caption = await this.llmService.generateCaption(photo.buffer, photo.mimeType);
+      
+      // Update the stored photo with analysis results
+      const updatedPhoto = this.photos.get(userId);
+      if (updatedPhoto && updatedPhoto.requestId === photo.requestId) {
+        updatedPhoto.llmAnalysis = analysis;
+        updatedPhoto.caption = caption;
+        updatedPhoto.isAnalyzing = false;
+        this.photos.set(userId, updatedPhoto);
+        
+        this.logger.info(`LLM analysis completed for photo ${photo.requestId}`);
+        this.logger.info(`Analysis: ${analysis.description}`);
+        this.logger.info(`Caption: ${caption}`);
+      }
+    } catch (error) {
+      this.logger.error(`Error in LLM analysis for photo ${photo.requestId}: ${error}`);
+      
+      // Mark analysis as failed
+      const updatedPhoto = this.photos.get(userId);
+      if (updatedPhoto && updatedPhoto.requestId === photo.requestId) {
+        updatedPhoto.isAnalyzing = false;
+        this.photos.set(userId, updatedPhoto);
+      }
+    }
+  }
 
   /**
- * Set up webview routes for photo display functionality
- */
+   * Set up webview routes for photo display functionality with LLM analysis
+   */
   private setupWebviewRoutes(): void {
     const app = this.getExpressApp();
 
@@ -154,7 +198,10 @@ class ExampleMentraOSApp extends AppServer {
       res.json({
         requestId: photo.requestId,
         timestamp: photo.timestamp.getTime(),
-        hasPhoto: true
+        hasPhoto: true,
+        isAnalyzing: photo.isAnalyzing,
+        llmAnalysis: photo.llmAnalysis,
+        caption: photo.caption
       });
     });
 
@@ -203,8 +250,6 @@ class ExampleMentraOSApp extends AppServer {
     });
   }
 }
-
-
 
 // Start the server
 // DEV CONSOLE URL: https://console.mentra.glass/

@@ -3,50 +3,179 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Photo Viewer</title>
+  <title>Photo Viewer with AI Analysis</title>
   <style>
     body {
       margin: 0;
-      padding: 0;
-      background-color: #000;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
+      padding: 20px;
+      background-color: #1a1a1a;
+      color: white;
       font-family: Arial, sans-serif;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .photo-section {
+      text-align: center;
+      margin-bottom: 30px;
     }
 
     .photo-container {
-      max-width: 100vw;
-      max-height: 100vh;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      max-width: 100%;
+      margin-bottom: 20px;
     }
 
     .photo {
       max-width: 100%;
-      max-height: 100%;
+      max-height: 70vh;
       object-fit: contain;
-      border-radius: 8px;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
 
     .no-photo {
-      color: white;
+      color: #888;
       text-align: center;
       font-size: 18px;
+      padding: 50px;
     }
 
     .loading {
-      color: white;
+      color: #4CAF50;
       text-align: center;
       font-size: 16px;
+      padding: 20px;
+    }
+
+    .analysis-section {
+      background: #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+
+    .analysis-header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .analysis-status {
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+      margin-left: 10px;
+    }
+
+    .status-analyzing {
+      background: #FF9800;
+      color: #000;
+    }
+
+    .status-complete {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .caption {
+      font-size: 18px;
+      font-style: italic;
+      color: #E0E0E0;
+      margin-bottom: 20px;
+      padding: 15px;
+      background: #333;
+      border-radius: 8px;
+      border-left: 4px solid #4CAF50;
+    }
+
+    .description {
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 20px;
+      color: #CCCCCC;
+    }
+
+    .tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 15px;
+    }
+
+    .tag {
+      background: #4CAF50;
+      color: white;
+      padding: 4px 12px;
+      border-radius: 16px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .confidence {
+      font-size: 14px;
+      color: #888;
+    }
+
+    .confidence-bar {
+      width: 100%;
+      height: 8px;
+      background: #333;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #FF5722, #FF9800, #4CAF50);
+      transition: width 0.3s ease;
+    }
+
+    .timestamp {
+      color: #666;
+      font-size: 12px;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <div class="photo-container">
-    <div id="content" class="loading">Loading latest photo...</div>
+  <div class="container">
+    <div class="photo-section">
+      <div class="photo-container">
+        <div id="content" class="loading">Loading latest photo...</div>
+      </div>
+    </div>
+
+    <div id="analysis" class="analysis-section" style="display: none;">
+      <div class="analysis-header">
+        <h2>AI Analysis</h2>
+        <div id="status" class="analysis-status status-analyzing">Analyzing...</div>
+      </div>
+      
+      <div id="caption-container" style="display: none;">
+        <div class="caption" id="caption"></div>
+      </div>
+      
+      <div id="analysis-content" style="display: none;">
+        <div class="description" id="description"></div>
+        
+        <div class="tags" id="tags"></div>
+        
+        <div class="confidence">
+          <div>Confidence: <span id="confidence-text"></span></div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="confidence-bar"></div>
+          </div>
+        </div>
+        
+        <div class="timestamp" id="timestamp"></div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -63,6 +192,7 @@
           // No photo available
           document.getElementById('content').innerHTML =
             '<div class="no-photo">No photos taken yet. Take a photo using your Mentra Live by pressing the right button!</div>';
+          document.getElementById('analysis').style.display = 'none';
           return;
         }
 
@@ -79,11 +209,71 @@
           // Update the display with new photo
           document.getElementById('content').innerHTML =
             '<img class="photo" src="/api/photo/' + photoInfo.requestId + '" alt="Latest Photo" />';
+          
+          // Show analysis section
+          document.getElementById('analysis').style.display = 'block';
         }
+
+        // Update analysis status and content
+        updateAnalysis(photoInfo);
       } catch (error) {
         console.error('Error checking for new photo:', error);
         document.getElementById('content').innerHTML =
           '<div class="no-photo">Error loading photo. Please refresh the page.</div>';
+      }
+    }
+
+    /**
+     * Update the analysis display
+     */
+    function updateAnalysis(photoInfo) {
+      const statusElement = document.getElementById('status');
+      const captionContainer = document.getElementById('caption-container');
+      const analysisContent = document.getElementById('analysis-content');
+
+      if (photoInfo.isAnalyzing) {
+        statusElement.textContent = 'Analyzing...';
+        statusElement.className = 'analysis-status status-analyzing';
+        captionContainer.style.display = 'none';
+        analysisContent.style.display = 'none';
+      } else {
+        statusElement.textContent = 'Complete';
+        statusElement.className = 'analysis-status status-complete';
+        
+        // Show caption if available
+        if (photoInfo.caption) {
+          document.getElementById('caption').textContent = photoInfo.caption;
+          captionContainer.style.display = 'block';
+        }
+
+        // Show analysis if available
+        if (photoInfo.llmAnalysis) {
+          const analysis = photoInfo.llmAnalysis;
+          
+          document.getElementById('description').textContent = analysis.description;
+          
+          // Update tags
+          const tagsContainer = document.getElementById('tags');
+          tagsContainer.innerHTML = '';
+          analysis.tags.forEach(tag => {
+            const tagElement = document.createElement('span');
+            tagElement.className = 'tag';
+            tagElement.textContent = tag;
+            tagsContainer.appendChild(tagElement);
+          });
+          
+          // Update confidence
+          const confidencePercent = Math.round(analysis.confidence * 100);
+          document.getElementById('confidence-text').textContent = `${confidencePercent}%`;
+          document.getElementById('confidence-bar').style.width = `${confidencePercent}%`;
+          
+          // Update timestamp
+          const timestamp = new Date(analysis.timestamp);
+          document.getElementById('timestamp').textContent = 
+            `Analyzed on ${timestamp.toLocaleDateString()} at ${timestamp.toLocaleTimeString()}`;
+          
+          analysisContent.style.display = 'block';
+        }
       }
     }
 
